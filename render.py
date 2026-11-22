@@ -162,22 +162,24 @@ def story_card(d, st, x, y, w, h, tier, n):
     kx = x + 40
     d.text((kx, ty + 3), st["region"], font=F(SANS_B, 11), fill=ink)
     if tier == "small":
-        hy = ty + 22
-        for line in wrap_text(d, st["headline"], F(SERIF, 14), w - 18)[:2]:
-            d.text((x + 9, hy), line, font=F(SERIF, 14), fill=BLACK)
-            hy += 15
+        print_block(d, st["headline"], x + 9, ty + 22, w - 18,
+                    F(SERIF, 14), BLACK, 15, limit=2)
         return
     d.text((kx, ty + 16), st.get("src", ""), font=F(SANS, 9), fill=GREY)
-    hy = ty + 30
     hsize, hstep = (19, 21) if tier == "lead" else (15, 17)
-    for line in wrap_text(d, st["headline"], F(SERIF, hsize), w - 18)[:3]:
-        d.text((x + 9, hy), line, font=F(SERIF, hsize), fill=BLACK)
-        hy += hstep
+    hy = print_block(d, st["headline"], x + 9, ty + 30, w - 18,
+                     F(SERIF, hsize), BLACK, hstep, limit=3)
     bsize = 11.5 if tier == "lead" else 10.5
-    for line in wrap_text(d, st["body"], F(SANS, bsize),
-                          w - 18)[:3 if tier == "lead" else 2]:
-        d.text((x + 9, hy + 2), line, font=F(SANS, bsize), fill=GREY)
-        hy += 14
+    print_block(d, st["body"], x + 9, hy + 2, w - 18, F(SANS, bsize),
+                GREY, 14, limit=3 if tier == "lead" else 2)
+
+
+def print_block(d, text, x, y, width, fnt, fill, step, limit):
+    """Set a wrapped block of text; return the y just past its last line."""
+    for line in wrap_text(d, text, fnt, width)[:limit]:
+        d.text((x, y), line, font=fnt, fill=fill)
+        y += step
+    return y
 
 
 # ------------------------------------------------------------------ ledger
@@ -269,48 +271,80 @@ DECK = ("Iran hits Bahrain, a missile in Zelensky's home town, Wall "
 
 
 # -------------------------------------------------------------------- page
-def render_page():
-    img = Image.new("RGB", (PAGE, PAGE), CREAM)
-    d = ImageDraw.Draw(img)
-
-    # kicker row
+def masthead(d):
+    """Kicker row, the big serif date, and the deck line under it."""
     d.text((EDGE, 22), "THE DAILY WORLD · THE WORLD IN ONE DAY",
            font=F(SANS_B, 13), fill=CRIMSON)
     right = "36 STORIES · 6 REGIONS · EVERY ONE DATED SATURDAY 21 NOVEMBER 2026"
     d.text((PAGE - EDGE, 22), right, font=F(SANS_B, 13), fill=BLACK,
            anchor="ra")
     d.line([EDGE, 42, PAGE - EDGE, 42], fill=BLACK, width=3)
-
-    # masthead
     d.text((PAGE / 2, 50), "Saturday 21 November 2026", font=F(SERIF, 57),
            fill=BLACK, anchor="ma")
     d.line([EDGE, 116, PAGE - EDGE, 116], fill=BLACK, width=1)
     d.text((PAGE / 2, 122), DECK, font=F(SERIF_IT, 19), fill=GREY, anchor="ma")
 
-    # the day in six figures
-    y = 148
+
+def figures_strip(d, top):
+    """Six numbered facts in a ruled, shaded band."""
     cell = SPAN / 6
-    d.rectangle([EDGE, y, PAGE - EDGE, y + 58], fill=CREAM_DK, outline=BLACK,
-                width=2)
+    d.rectangle([EDGE, top, PAGE - EDGE, top + 58], fill=CREAM_DK,
+                outline=BLACK, width=2)
     for i, (val, cap) in enumerate(FIGURES):
         cx = EDGE + i * cell
         if i:
-            d.line([cx, y, cx, y + 58], fill=BLACK, width=1)
-        d.text((cx + cell / 2, y + 6), val, font=F(SERIF, 25), fill=CRIMSON,
-               anchor="ma")
-        for j, line in enumerate(wrap_text(d, cap, F(SANS, 9.5),
-                                           cell - 12)[:2]):
-            d.text((cx + cell / 2, y + 36 + j * 11), line, font=F(SANS, 9.5),
-                   fill=GREY, anchor="ma")
+            d.line([cx, top, cx, top + 58], fill=BLACK, width=1)
+        d.text((cx + cell / 2, top + 6), val, font=F(SERIF, 25),
+               fill=CRIMSON, anchor="ma")
+        lines = wrap_text(d, cap, F(SANS, 9.5), cell - 12)[:2]
+        for j, line in enumerate(lines):
+            d.text((cx + cell / 2, top + 36 + j * 11), line,
+                   font=F(SANS, 9.5), fill=GREY, anchor="ma")
 
-    # region tally bar
-    y = 214
-    d.rectangle([EDGE, y, PAGE - EDGE, y + 28], fill=BLACK)
+
+def tally_bar(d, top):
+    """Black band naming each region and how many stories it holds."""
+    d.rectangle([EDGE, top, PAGE - EDGE, top + 28], fill=BLACK)
     label = "   ·   ".join(f"{name} {n}" for name, n in REGION_TALLY)
-    d.text((PAGE / 2, y + 6), label, font=F(SANS_B, 13.5), fill=WHITE,
+    d.text((PAGE / 2, top + 6), label, font=F(SANS_B, 13.5), fill=WHITE,
            anchor="ma")
 
-    # story cards: 3 leads, 5 mids, 5 smalls
+
+def briefs_block(d, top, gap):
+    """The rest of the day: numbered one-liners in three columns."""
+    d.text((EDGE, top), "ALSO ON SATURDAY 21 NOVEMBER — THE REST OF THE DAY",
+           font=F(SANS_B, 13), fill=BLACK)
+    d.line([EDGE, top + 20, PAGE - EDGE, top + 20], fill=BLACK, width=1)
+    col_w = (SPAN - 2 * gap) / 3
+    bf = F(SANS, 10.5)
+    per_col = (len(BRIEFS) + 2) // 3
+    for i, (n, region, text) in enumerate(BRIEFS):
+        col, row = divmod(i, per_col)
+        bx = EDGE + col * (col_w + gap)
+        by = top + 26 + row * 14.8
+        d.text((bx, by), f"{n}.", font=F(SANS_B, 10.5), fill=CRIMSON)
+        d.text((bx + 22, by), one_line(d, text, bf, col_w - 24), font=bf,
+               fill=BLACK)
+
+
+def date_check_box(d):
+    """Red-ruled strip recording what was deliberately left out, and why."""
+    d.rectangle([EDGE, 954, PAGE - EDGE, 998], outline=CRIMSON, width=2)
+    d.text((EDGE + 10, 960), "DATE CHECK", font=F(SANS_B, 12), fill=CRIMSON)
+    lines = wrap_text(d, DATE_CHECK, F(SANS, 10.5), SPAN - 130)[:2]
+    for j, line in enumerate(lines):
+        d.text((EDGE + 108, 961 + j * 14), line, font=F(SANS, 10.5),
+               fill=BLACK)
+    d.text((PAGE - EDGE, 1004), "Sources credited per panel · Original artwork",
+           font=F(SANS, 9.5), fill=GREY, anchor="ra")
+
+
+def render_page():
+    img = Image.new("RGB", (PAGE, PAGE), CREAM)
+    d = ImageDraw.Draw(img)
+    masthead(d)
+    figures_strip(d, 148)
+    tally_bar(d, 214)
     gap = 10
     lead_w = (SPAN - 2 * gap) / 3
     for i, st in enumerate(LEADS):
@@ -323,33 +357,8 @@ def render_page():
     for i, st in enumerate(SMALLS):
         story_card(d, st, EDGE + i * (mid_w + gap), 684, mid_w, 114,
                    "small", i + 9)
-
-    # briefs in three columns
-    y = 810
-    d.text((EDGE, y), "ALSO ON SATURDAY 21 NOVEMBER — THE REST OF THE DAY",
-           font=F(SANS_B, 13), fill=BLACK)
-    d.line([EDGE, y + 20, PAGE - EDGE, y + 20], fill=BLACK, width=1)
-    col_w = (SPAN - 2 * gap) / 3
-    bf = F(SANS, 10.5)
-    per_col = (len(BRIEFS) + 2) // 3
-    for i, (n, region, text) in enumerate(BRIEFS):
-        col, row = divmod(i, per_col)
-        bx = EDGE + col * (col_w + gap)
-        by = y + 26 + row * 14.8
-        d.text((bx, by), f"{n}.", font=F(SANS_B, 10.5), fill=CRIMSON)
-        d.text((bx + 22, by), one_line(d, text, bf, col_w - 24), font=bf,
-               fill=BLACK)
-
-    # date-check strip and colophon
-    d.rectangle([EDGE, 954, PAGE - EDGE, 998], outline=CRIMSON, width=2)
-    d.text((EDGE + 10, 960), "DATE CHECK", font=F(SANS_B, 12), fill=CRIMSON)
-    for j, line in enumerate(wrap_text(d, DATE_CHECK, F(SANS, 10.5),
-                                       SPAN - 130)[:2]):
-        d.text((EDGE + 108, 961 + j * 14), line, font=F(SANS, 10.5),
-               fill=BLACK)
-    d.text((PAGE - EDGE, 1004), "Sources credited per panel · Original artwork",
-           font=F(SANS, 9.5), fill=GREY, anchor="ra")
-
+    briefs_block(d, 810, gap)
+    date_check_box(d)
     img.save("entry.png")
     print("wrote entry.png")
 

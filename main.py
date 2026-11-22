@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""news-image-20261121 entry program (Python 3.13, standard library only).
+"""Deliver the entry image for make.fun's news-image-20261121.
 
-The entry image is entry.png beside this file: a broadsheet front page
-summing up the world news of Saturday 21 November 2026, rendered by
-render.py from researched, attributed stories. This program copies that
-image, byte for byte, to /output/entry.png. It uses no network, reads
-nothing else, and two runs always write identical bytes.
-
-Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-    mkdir -p out && MAKEFUN_OUTPUT_DIR=out python3 main.py
+The picture itself, entry.png, sits next to this file: a one-page
+broadsheet that sums up Saturday 21 November 2026 (Iran's Bahrain
+strikes, the Kryvyi Rih missile, Wall Street's AI correction, and
+33 more stories). render.py drew it ahead of time; this program's
+whole job is to place a byte-identical copy where the grader looks,
+at $MAKEFUN_OUTPUT_DIR/entry.png, or /output/entry.png when the
+variable is unset. Standard library only, no network, and the same
+bytes come out on every run.
 """
 
 import os
-import shutil
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-SOURCE = HERE / "entry.png"
+IMAGE_BYTES = (Path(__file__).resolve().parent / "entry.png").read_bytes()
 
 
-def main() -> None:
-    out_dir = Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"))
-    out_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(SOURCE, out_dir / "entry.png")
+def deliver() -> Path:
+    target_dir = Path(os.getenv("MAKEFUN_OUTPUT_DIR", "/output"))
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / "entry.png"
+    target.write_bytes(IMAGE_BYTES)
+    return target
 
 
 if __name__ == "__main__":
-    main()
+    deliver()
